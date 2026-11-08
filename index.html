@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CircuitLab Studio - Professional SPICE Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            900: '#0b0f19',
+                            800: '#111827',
+                            700: '#1f2937',
+                            600: '#374151',
+                            500: '#4b5563',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; user-select: none; }
+        .grid-bg {
+            background-size: 20px 20px;
+            background-image: 
+                linear-gradient(to right, rgba(75, 85, 99, 0.15) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(75, 85, 99, 0.15) 1px, transparent 1px);
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-dark-900 text-gray-100 h-screen flex flex-col overflow-hidden">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-dark-800 border-b border-gray-700 px-4 py-2.5 flex items-center justify-between shrink-0 shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="bg-blue-600 p-2 rounded-lg text-white shadow-lg shadow-blue-500/30 flex items-center justify-center font-bold">
+                ⚡
+            </div>
+            <div>
+                <h1 class="font-bold text-lg tracking-tight flex items-center gap-2">
+                    CircuitLab Studio <span class="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full border border-blue-500/30 font-mono">v2.5 Live Status</span>
+                </h1>
+                <p class="text-xs text-gray-400">Interactive MNA SPICE Simulator with Component Health & DC Motors</p>
+            </div>
+        </div>
+
+        <!-- Simulation Controls -->
+        <div class="flex items-center space-x-2 bg-dark-900 p-1 rounded-xl border border-gray-700">
+            <button id="btnRun" onclick="toggleSimulation()" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all">
+                <span id="runIcon">▶</span> <span id="runText">Run Sim</span>
+            </button>
+            <button onclick="stepSimulation()" class="px-3 py-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-300 font-medium text-sm transition-all" title="Step 1 dt">
+                ⏭
+            </button>
+            <button onclick="resetSimulation()" class="px-3 py-1.5 rounded-lg bg-dark-700 hover:bg-red-900/40 text-gray-300 hover:text-red-400 font-medium text-sm transition-all" title="Reset Circuit">
+                🔄
+            </button>
+        </div>
+
+        <!-- Global Utilities & Actions -->
+        <div class="flex items-center space-x-2">
+            <button onclick="loadPreset('rc_filter')" class="px-3 py-1.5 bg-dark-700 hover:bg-dark-600 text-xs rounded-lg text-gray-300 border border-gray-600 transition">RC Filter</button>
+            <button onclick="loadPreset('motor_driver')" class="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/40 text-xs rounded-lg text-blue-300 border border-blue-500/30 transition font-medium">🌀 Motor Circuit</button>
+            <button onclick="loadPreset('boost_converter')" class="px-3 py-1.5 bg-dark-700 hover:bg-dark-600 text-xs rounded-lg text-gray-300 border border-gray-600 transition">Boost Conv</button>
+            <div class="h-5 w-px bg-gray-700 mx-1"></div>
+            <button onclick="clearCanvas()" class="p-2 text-gray-400 hover:text-red-400 rounded-lg hover:bg-dark-700 transition" title="Clear Canvas">🗑</button>
+            <button onclick="exportJSON()" class="p-2 text-gray-400 hover:text-blue-400 rounded-lg hover:bg-dark-700 transition" title="Export Project">📥</button>
+            <label class="p-2 text-gray-400 hover:text-emerald-400 rounded-lg hover:bg-dark-700 transition cursor-pointer" title="Import Project">
+                📤
+                <input type="file" id="importFile" class="hidden" onchange="importJSON(event)">
+            </label>
+        </div>
+    </header>
+
+    <!-- Main Workspace Layout -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Component Toolbar Sidebar -->
+        <aside class="w-64 bg-dark-800 border-r border-gray-700 flex flex-col shrink-0">
+            <div class="p-3 border-b border-gray-700 font-semibold text-xs tracking-wider uppercase text-gray-400">
+                Component Library
+            </div>
+            <div class="flex-1 overflow-y-auto p-3 space-y-2">
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="selectComponentTool('resistor')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                        <span class="text-orange-400 text-base font-bold">∿</span> Resistor
+                    </button>
+                    <button onclick="selectComponentTool('capacitor')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                        <span class="text-blue-400 text-base font-bold">‖</span> Capacitor
+                    </button>
+                    <button onclick="selectComponentTool('inductor')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                        <span class="text-emerald-400 text-base font-bold">@</span> Inductor
+                    </button>
+                    <button onclick="selectComponentTool('vsource')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                        <span class="text-amber-400 text-base font-bold">⚡</span> DC Voltage
+                    </button>
+                    <button onclick="selectComponentTool('acsource')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                        <span class="text-purple-400 text-base font-bold">∿</span> AC Source
+                    </button>
+                    <button onclick="selectComponentTool('ground')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                        <span class="text-emerald-500 text-base font-bold">⏦</span> Ground (0V)
+                    </button>
+                    <button onclick="selectComponentTool('diode')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                        <span class="text-red-400 text-base font-bold">►</span> Diode
+                    </button>
+                    <button onclick="selectComponentTool('led')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                        <span class="text-yellow-400 text-base font-bold">💡</span> LED Indicator
+                    </button>
+                    <button onclick="selectComponentTool('npn')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                        <span class="text-indigo-400 text-base font-bold">┚</span> NPN Transistor
+                    </button>
+                    <button onclick="selectComponentTool('motor')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group ring-2 ring-blue-500/50">
+                        <span class="text-cyan-400 text-base font-bold animate-spin">🌀</span> DC Motor
+                    </button>
+                    <button onclick="selectComponentTool('switch')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                        <span class="text-emerald-400 text-base font-bold">⑂</span> SPST Switch
+                    </button>
+                    <button onclick="selectComponentTool('pushbutton')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                        <span class="text-pink-400 text-base font-bold">⊙</span> Push Button
+                    </button>
+                </div>
+
+                <div class="pt-4 border-t border-gray-700">
+                    <div class="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">Meters & Probes</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="selectComponentTool('voltmeter')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                            <span class="text-cyan-400 text-base font-bold">V</span> Voltmeter
+                        </button>
+                        <button onclick="selectComponentTool('ampermeter')" class="comp-tool-btn p-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 border border-gray-600 flex flex-col items-center justify-center gap-1.5 text-xs text-gray-300 transition group">
+                            <span class="text-teal-400 text-base font-bold">A</span> Ammeter
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interaction Mode Selectors -->
+            <div class="p-3 border-t border-gray-700 bg-dark-900/50 flex flex-col gap-2">
+                <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Canvas Mode</div>
+                <div class="grid grid-cols-2 gap-1.5">
+                    <button id="modeSelect" onclick="setInteractionMode('select')" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium transition flex items-center justify-center gap-1">
+                        Select
+                    </button>
+                    <button id="modeWire" onclick="setInteractionMode('wire')" class="px-3 py-1.5 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1">
+                        Wire
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Center Canvas & Oscilloscope Area -->
+        <main class="flex-1 flex flex-col relative overflow-hidden bg-dark-900">
+            
+            <!-- Canvas Toolbar Overlays -->
+            <div class="absolute top-4 left-4 z-10 flex items-center space-x-2 bg-dark-800/90 backdrop-blur border border-gray-700 p-1.5 rounded-xl shadow-xl">
+                <button onclick="zoomCanvas(1.2)" class="w-8 h-8 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-300 flex items-center justify-center transition" title="Zoom In">+</button>
+                <button onclick="zoomCanvas(0.8)" class="w-8 h-8 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-300 flex items-center justify-center transition" title="Zoom Out">-</button>
+                <button onclick="resetZoom()" class="w-8 h-8 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-300 flex items-center justify-center transition" title="Reset Zoom">⤢</button>
+                <div class="w-px h-5 bg-gray-700 mx-1"></div>
+                <button id="btnHeatmap" onclick="toggleHeatmap()" class="px-3 py-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-xs font-medium text-gray-300 transition flex items-center gap-1.5">
+                    🔥 Voltage Heatmap
+                </button>
+            </div>
+
+            <!-- Canvas Element -->
+            <div id="canvasContainer" class="flex-1 relative cursor-crosshair grid-bg overflow-hidden">
+                <canvas id="simCanvas" class="absolute inset-0 w-full h-full"></canvas>
+            </div>
+
+            <!-- Oscilloscope / Analysis Drawer -->
+            <div id="scopePanel" class="h-64 bg-dark-800 border-t border-gray-700 flex flex-col shrink-0 relative transition-all duration-300">
+                <div class="bg-dark-900 px-4 py-2 border-b border-gray-700 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <span class="font-bold text-xs uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                            📈 Dual-Channel Digital Oscilloscope
+                        </span>
+                        <div class="flex items-center space-x-2 text-xs text-gray-400">
+                            <span class="inline-block w-2.5 h-2.5 rounded-full bg-cyan-400"></span> CH1: Node Voltage
+                            <span class="inline-block w-2.5 h-2.5 rounded-full bg-pink-400 ml-2"></span> CH2: Component Current
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <div class="flex items-center space-x-1 text-xs text-gray-300">
+                            <span>Time/Div:</span>
+                            <select id="timeDiv" class="bg-dark-700 border border-gray-600 rounded px-1.5 py-0.5 text-xs text-white">
+                                <option value="1">1 ms</option>
+                                <option value="5" selected>5 ms</option>
+                                <option value="20">20 ms</option>
+                                <option value="100">100 ms</option>
+                            </select>
+                        </div>
+                        <button onclick="toggleScope()" class="text-gray-400 hover:text-white transition" id="scopeToggleIcon">▼</button>
+                    </div>
+                </div>
+                <div class="flex-1 relative bg-black flex">
+                    <canvas id="scopeCanvas" class="absolute inset-0 w-full h-full"></canvas>
+                    <div class="absolute top-2 right-2 bg-dark-900/80 backdrop-blur border border-gray-700 rounded-lg p-2 text-xs font-mono space-y-1 shadow-lg pointer-events-none">
+                        <div class="text-cyan-400" id="ch1Readout">CH1 V_max: 0.00 V</div>
+                        <div class="text-pink-400" id="ch2Readout">CH2 I_rms: 0.00 mA</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Inspector Sidebar -->
+        <aside class="w-80 bg-dark-800 border-l border-gray-700 flex flex-col shrink-0">
+            <div class="p-3 border-b border-gray-700 font-semibold text-xs tracking-wider uppercase text-gray-400 flex items-center justify-between">
+                <span>Component Properties & Health</span>
+                <span id="selectedIdText" class="text-blue-400 font-mono text-xs">No Selection</span>
+            </div>
+            <div id="inspectorContent" class="flex-1 p-4 overflow-y-auto space-y-4">
+                <div class="text-center py-12 text-gray-500 text-sm">
+                    <p>Select any component on the canvas to inspect its parameters, live operating status, power dissipation, and health.</p>
+                </div>
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- Simulation & Math Engine Script -->
+    <script>
+        let components = [];
+        let wires = [];
+        let nodes = [];
+        let selectedComponent = null;
+        let selectedWire = null;
+        let interactionMode = 'select';
+        let currentTool = null;
+        let isRunning = false;
+        let showHeatmap = false;
+        let time = 0;
+        let dt = 0.001;
+
+        let pan = { x: 100, y: 50 };
+        let zoom = 1;
+        let isPanning = false;
+        let panStart = { x: 0, y: 0 };
+
+        const bufferSize = 400;
+        let ch1Buffer = new Array(bufferSize).fill(0);
+        let ch2Buffer = new Array(bufferSize).fill(0);
+
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const scopeCanvas = document.getElementById('scopeCanvas');
+        const scopeCtx = scopeCanvas.getContext('2d');
+
+        function resizeCanvases() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            scopeCanvas.width = scopeCanvas.parentElement.clientWidth;
+            scopeCanvas.height = scopeCanvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvases);
+        resizeCanvases();
+
+        function createComponent(type, x, y) {
+            let comp = {
+                id: 'comp_' + Math.random().toString(36.substr(2, 9)),
+                type: type,
+                x: x,
+                y: y,
+                rotation: 0,
+                value: getDefaultValue(type),
+                voltage: 12,
+                freq: 50,
+                state: false,
+                burned: false,
+                v_drop: 0,
+                current: 0,
+                power: 0,
+                temp: 25,
+                rpm: 0
+            };
+            comp.pins = getComponentPins(type);
+            return comp;
+        }
+
+        function getDefaultValue(type) {
+            switch(type) {
+                case 'resistor': return 1000;
+                case 'capacitor': return 0.00001;
+                case 'inductor': return 0.01;
+                case 'vsource': return 12;
+                case 'acsource': return 10;
+                case 'diode':
+                case 'led': return 0.7;
+                case 'npn': return 100;
+                case 'motor': return 15;
+                default: return 0;
+            }
+        }
+
+        function getComponentPins(type) {
+            switch(type) {
+                case 'resistor':
+                case 'capacitor':
+                case 'inductor':
+                case 'vsource':
+                case 'acsource':
+                case 'diode':
+                case 'led':
+                case 'switch':
+                case 'pushbutton':
+                case 'voltmeter':
+                case 'ampermeter':
+                case 'motor':
+                    return [{x: -30, y: 0, name: 'p1'}, {x: 30, y: 0, name: 'p2'}];
+                case 'npn':
+                    return [{x: -20, y: 20, name: 'B'}, {x: 0, y: -30, name: 'C'}, {x: 0, y: 30, name: 'E'}];
+                case 'ground':
+                    return [{x: 0, y: -15, name: 'G'}];
+                default:
+                    return [{x: -20, y: 0, name: 'p1'}, {x: 20, y: 0, name: 'p2'}];
+            }
+        }
+
+        function loadPreset(name) {
+            clearCanvas();
+            if (name === 'rc_filter') {
+                let g1 = createComponent('ground', 100, 400);
+                let v1 = createComponent('vsource', 100, 250);
+                let r1 = createComponent('resistor', 250, 200);
+                let c1 = createComponent('capacitor', 400, 300);
+                let g2 = createComponent('ground', 400, 400);
+                
+                c1.rotation = 90;
+                components = [g1, v1, r1, c1, g2];
+                wires.push({id: 'w1', from: {comp: v1.id, pin: 'p1'}, to: {comp: r1.id, pin: 'p1'}, pts: []});
+                wires.push({id: 'w2', from: {comp: r1.id, pin: 'p2'}, to: {comp: c1.id, pin: 'p1'}, pts: []});
+                wires.push({id: 'w3', from: {comp: c1.id, pin: 'p2'}, to: {comp: g2.id, pin: 'G'}, pts: []});
+                wires.push({id: 'w4', from: {comp: v1.id, pin: 'p2'}, to: {comp: g1.id, pin: 'G'}, pts: []});
+            } else if (name === 'motor_driver') {
+                let g1 = createComponent('ground', 150, 450);
+                let v1 = createComponent('vsource', 150, 250);
+                let sw = createComponent('switch', 280, 200);
+                let motor = createComponent('motor', 450, 250);
+                let g2 = createComponent('ground', 450, 450);
+
+                sw.state = true;
+                components = [g1, v1, sw, motor, g2];
+
+                wires.push({id: 'wm1', from: {comp: v1.id, pin: 'p1'}, to: {comp: sw.id, pin: 'p1'}, pts: []});
+                wires.push({id: 'wm2', from: {comp: sw.id, pin: 'p2'}, to: {comp: motor.id, pin: 'p1'}, pts: []});
+                wires.push({id: 'wm3', from: {comp: motor.id, pin: 'p2'}, to: {comp: g2.id, pin: 'G'}, pts: []});
+                wires.push({id: 'wm4', from: {comp: v1.id, pin: 'p2'}, to: {comp: g1.id, pin: 'G'}, pts: []});
+            } else if (name === 'boost_converter') {
+                let g1 = createComponent('ground', 100, 400);
+                let v1 = createComponent('vsource', 100, 250);
+                let l1 = createComponent('inductor', 220, 250);
+                let sw = createComponent('pushbutton', 340, 350);
+                let d1 = createComponent('diode', 340, 250);
+                let c1 = createComponent('capacitor', 480, 300);
+                let g2 = createComponent('ground', 480, 450);
+
+                c1.rotation = 90;
+                sw.rotation = 90;
+                components = [g1, v1, l1, sw, d1, c1, g2];
+            }
+            rebuildTopology();
+        }
+
+        function rebuildTopology() {
+            nodes = [];
+            let pinMap = new Map(); 
+            
+            let nextNetId = 1;
+            components.forEach(comp => {
+                comp.pins.forEach(pin => {
+                    let key = `${comp.id}.${pin.name}`;
+                    pinMap.set(key, null);
+                });
+            });
+
+            wires.forEach(w => {
+                let k1 = `${w.from.comp}.${w.from.pin}`;
+                let k2 = `${w.to.comp}.${w.to.pin}`;
+                let n1 = pinMap.get(k1);
+                let n2 = pinMap.get(k2);
+                if (n1 !== null && n2 !== null) {
+                    let target = Math.min(n1, n2);
+                    pinMap.forEach((v, k) => { if (v === Math.max(n1, n2)) pinMap.set(k, target); });
+                } else if (n1 !== null) {
+                    pinMap.set(k2, n1);
+                } else if (n2 !== null) {
+                    pinMap.set(k1, n2);
+                } else {
+                    pinMap.set(k1, nextNetId);
+                    pinMap.set(k2, nextNetId);
+                    nextNetId++;
+                }
+            });
+
+            pinMap.forEach((v, k) => {
+                if (v === null) {
+                    pinMap.set(k, nextNetId++);
+                }
+            });
+
+            let groundComp = components.find(c => c.type === 'ground');
+            let groundNet = groundComp ? pinMap.get(`${groundComp.id}.G`) : 1;
+
+            let netRemap = new Map();
+            let uniqueNets = [...new Set(pinMap.values())];
+            let activeNetIndex = 1;
+            uniqueNets.forEach(net => {
+                if (net === groundNet) {
+                    netRemap.set(net, 0);
+                } else {
+                    netRemap.set(net, activeNetIndex++);
+                }
+            });
+
+            components.forEach(comp => {
+                comp.pins.forEach(pin => {
+                    let rawNet = pinMap.get(`${comp.id}.${pin.name}`);
+                    pin.net = netRemap.get(rawNet);
+                });
+            });
+        }
+
+        function runSimulationStep() {
+            rebuildTopology();
+
+            let maxNets = 0;
+            components.forEach(c => c.pins.forEach(p => { if (p.net > maxNets) maxNets = p.net; }));
+            
+            let numNodes = maxNets;
+            if (numNodes <= 0) return;
+
+            let G = Array(numNodes).fill(0).map(() => Array(numNodes).fill(0));
+            let I = Array(numNodes).fill(0);
+
+            components.forEach(comp => {
+                if (comp.burned) return;
+
+                if (comp.type === 'resistor') {
+                    let n1 = comp.pins[0].net;
+                    let n2 = comp.pins[1].net;
+                    let r = Math.max(comp.value, 0.001);
+                    let g = 1 / r;
+                    stampConductance(G, n1, n2, g);
+                } else if (comp.type === 'vsource') {
+                    let n1 = comp.pins[0].net; 
+                    let n2 = comp.pins[1].net; 
+                    let v = comp.voltage;
+                    let g = 1e5; 
+                    stampConductance(G, n1, n2, g);
+                    stampCurrent(I, n1, n2, v * g);
+                } else if (comp.type === 'acsource') {
+                    let n1 = comp.pins[0].net;
+                    let n2 = comp.pins[1].net;
+                    let v = comp.value * Math.sin(2 * Math.PI * comp.freq * time);
+                    let g = 1e5;
+                    stampConductance(G, n1, n2, g);
+                    stampCurrent(I, n1, n2, v * g);
+                } else if (comp.type === 'switch' || comp.type === 'pushbutton') {
+                    let n1 = comp.pins[0].net;
+                    let n2 = comp.pins[1].net;
+                    let closed = (comp.type === 'switch') ? comp.state : comp.state;
+                    let g = closed ? 1e6 : 1e-9;
+                    stampConductance(G, n1, n2, g);
+                } else if (comp.type === 'diode' || comp.type === 'led') {
+                    let n1 = comp.pins[0].net;
+                    let n2 = comp.pins[1].net;
+                    let g = 1e-3; 
+                    let i_eq = 0.02;
+                    if (comp.type === 'led' && comp.state) g = 0.5;
+                    stampConductance(G, n1, n2, g);
+                    stampCurrent(I, n1, n2, i_eq);
+                } else if (comp.type === 'motor') {
+                    let n1 = comp.pins[0].net;
+                    let n2 = comp.pins[1].net;
+                    let r = Math.max(comp.value, 1);
+                    let backEmf = (comp.rpm / 3000) * 10;
+                    let g = 1 / r;
+                    stampConductance(G, n1, n2, g);
+                    stampCurrent(I, n1, n2, backEmf * g);
+                }
+            });
+
+            let V = gaussianElimination(G, I, numNodes);
+
+            components.forEach(comp => {
+                let v1 = (comp.pins[0] && comp.pins[0].net > 0) ? V[comp.pins[0].net - 1] : 0;
+                let v2 = (comp.pins[1] && comp.pins[1].net > 0) ? V[comp.pins[1].net - 1] : 0;
+                
+                comp.v_drop = Math.abs(v1 - v2);
+                
+                if (comp.type === 'resistor') {
+                    comp.current = comp.v_drop / Math.max(comp.value, 0.001);
+                    comp.power = comp.current * comp.current * comp.value;
+                } else if (comp.type === 'vsource' || comp.type === 'acsource') {
+                    comp.current = comp.v_drop / 1e-5;
+                    comp.power = comp.v_drop * comp.current;
+                } else if (comp.type === 'motor') {
+                    let backEmf = (comp.rpm / 3000) * 10;
+                    comp.current = Math.max(0, (comp.v_drop - backEmf) / Math.max(comp.value, 1));
+                    comp.power = comp.v_drop * comp.current;
+                    let targetRpm = Math.min(6000, comp.v_drop * 400);
+                    comp.rpm += (targetRpm - comp.rpm) * 0.1;
+                } else if (comp.type === 'led') {
+                    comp.current = comp.v_drop > 0.7 ? (comp.v_drop - 0.7) / 20 : 0;
+                    comp.state = comp.current > 0.001;
+                }
+
+                if (comp.power > 0.75 && comp.type !== 'vsource' && comp.type !== 'acsource') {
+                    comp.burned = true;
+                }
+            });
+
+            if (components.length > 0) {
+                let sampleComp = components.find(c => c.type === 'resistor') || components[0];
+                ch1Buffer.shift();
+                ch1Buffer.push(sampleComp.v_drop || 0);
+
+                ch2Buffer.shift();
+                ch2Buffer.push((sampleComp.current || 0) * 1000);
+            }
+
+            time += dt;
+        }
+
+        function stampConductance(G, n1, n2, g) {
+            if (n1 > 0) G[n1-1][n1-1] += g;
+            if (n2 > 0) G[n2-1][n2-1] += g;
+            if (n1 > 0 && n2 > 0) {
+                G[n1-1][n2-1] -= g;
+                G[n2-1][n1-1] -= g;
+            }
+        }
+
+        function stampCurrent(I, n1, n2, val) {
+            if (n1 > 0) I[n1-1] -= val;
+            if (n2 > 0) I[n2-1] += val;
+        }
+
+        function gaussianElimination(A, b, n) {
+            let x = Array(n).fill(0);
+            for (let i = 0; i < n; i++) {
+                let maxEl = Math.abs(A[i][i]);
+                let maxRow = i;
+                for (let k = i + 1; k < n; k++) {
+                    if (Math.abs(A[k][i]) > maxEl) {
+                        maxEl = Math.abs(A[k][i]);
+                        maxRow = k;
+                    }
+                }
+                let temp = A[maxRow]; A[maxRow] = A[i]; A[i] = temp;
+                let t = b[maxRow]; b[maxRow] = b[i]; b[i] = t;
+
+                for (let k = i + 1; k < n; k++) {
+                    let c = -A[k][i] / A[i][i];
+                    for (let j = i; j < n; j++) {
+                        if (i === j) A[k][j] = 0;
+                        else A[k][j] += c * A[i][j];
+                    }
+                    b[k] += c * b[i];
+                }
+            }
+            for (let i = n - 1; i >= 0; i--) {
+                let sum = 0;
+                for (let j = i + 1; j < n; j++) sum += A[i][j] * x[j];
+                x[i] = (b[i] - sum) / (A[i][i] !== 0 ? A[i][i] : 1e-9);
+            }
+            return x;
+        }
+
+        function drawGrid() {
+            ctx.save();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.translate(pan.x, pan.y);
+            ctx.scale(zoom, zoom);
+
+            ctx.fillStyle = '#374151';
+            let step = 20;
+            let startX = -pan.x / zoom;
+            let startY = -pan.y / zoom;
+            let endX = startX + canvas.width / zoom;
+            let endY = startY + canvas.height / zoom;
+
+            for (let x = Math.floor(startX / step) * step; x < endX; x += step) {
+                for (let y = Math.floor(startY / step) * step; y < endY; y += step) {
+                    ctx.fillRect(x, y, 1.5, 1.5);
+                }
+            }
+
+            wires.forEach(w => {
+                let c1 = components.find(c => c.id === w.from.comp);
+                let c2 = components.find(c => c.id === w.to.comp);
+                if (!c1 || !c2) return;
+                let p1 = getPinWorldPos(c1, w.from.pin);
+                let p2 = getPinWorldPos(c2, w.to.pin);
+
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.strokeStyle = isRunning ? '#38bdf8' : '#6b7280';
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+
+                if (isRunning) {
+                    ctx.strokeStyle = '#34d399';
+                    ctx.setLineDash([4, 8]);
+                    ctx.lineDashOffset = -(time * 100) % 12;
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            });
+
+            components.forEach(comp => {
+                drawComponent(comp);
+            });
+
+            ctx.restore();
+        }
+
+        function getPinWorldPos(comp, pinName) {
+            let pin = comp.pins.find(p => p.name === pinName);
+            if (!pin) return {x: comp.x, y: comp.y};
+            let rad = (comp.rotation * Math.PI) / 180;
+            let cos = Math.cos(rad), sin = Math.sin(rad);
+            let rx = pin.x * cos - pin.y * sin;
+            let ry = pin.x * sin + pin.y * cos;
+            return { x: comp.x + rx, y: comp.y + ry };
+        }
+
+        function drawComponent(comp) {
+            ctx.save();
+            ctx.translate(comp.x, comp.y);
+            ctx.rotate((comp.rotation * Math.PI) / 180);
+
+            if (comp === selectedComponent) {
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(-35, -25, 70, 50);
+            }
+
+            if (comp.burned) {
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+                ctx.fillRect(-35, -25, 70, 50);
+            }
+
+            ctx.strokeStyle = comp.burned ? '#ef4444' : '#e5e7eb';
+            ctx.fillStyle = '#1f2937';
+            ctx.lineWidth = 2;
+
+            if (comp.type === 'resistor') {
+                ctx.strokeRect(-25, -10, 50, 20);
+                ctx.fillRect(-25, -10, 50, 20);
+                ctx.fillStyle = '#f97316'; ctx.fillRect(-15, -10, 4, 20);
+                ctx.fillStyle = '#000000'; ctx.fillRect(-5, -10, 4, 20);
+                ctx.fillStyle = '#ef4444'; ctx.fillRect(5, -10, 4, 20);
+            } else if (comp.type === 'capacitor') {
+                ctx.fillStyle = '#1f2937';
+                ctx.fillRect(-20, -15, 40, 30);
+                ctx.strokeRect(-20, -15, 40, 30);
+                ctx.beginPath();
+                ctx.moveTo(-5, -15); ctx.lineTo(-5, 15);
+                ctx.moveTo(5, -15); ctx.lineTo(5, 15);
+                ctx.strokeStyle = '#38bdf8'; ctx.stroke();
+            } else if (comp.type === 'vsource') {
+                ctx.beginPath();
+                ctx.arc(0, 0, 20, 0, Math.PI * 2);
+                ctx.fillStyle = '#1f2937'; ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#fbbf24';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText('DC', 0, 0);
+            } else if (comp.type === 'motor') {
+                ctx.beginPath();
+                ctx.arc(0, 0, 24, 0, Math.PI * 2);
+                ctx.fillStyle = '#1f2937'; ctx.fill(); ctx.stroke();
+                
+                ctx.save();
+                ctx.rotate(time * (comp.rpm / 60) * Math.PI * 2);
+                ctx.strokeStyle = '#38bdf8';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(-15, 0); ctx.lineTo(15, 0);
+                ctx.moveTo(0, -15); ctx.lineTo(0, 15);
+                ctx.stroke();
+                ctx.restore();
+
+                ctx.fillStyle = '#38bdf8';
+                ctx.font = 'bold 10px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('M', 0, 32);
+            } else if (comp.type === 'ground') {
+                ctx.beginPath();
+                ctx.moveTo(0, 0); ctx.lineTo(0, 15);
+                ctx.moveTo(-15, 15); ctx.lineTo(15, 15);
+                ctx.moveTo(-10, 20); ctx.lineTo(10, 20);
+                ctx.moveTo(-5, 25); ctx.lineTo(5, 25);
+                ctx.strokeStyle = '#34d399'; ctx.stroke();
+            } else if (comp.type === 'led') {
+                ctx.beginPath();
+                ctx.moveTo(-15, -15); ctx.lineTo(15, 0); ctx.lineTo(-15, 15); ctx.closePath();
+                ctx.fillStyle = comp.state ? '#facc15' : '#374151';
+                ctx.fill(); ctx.stroke();
+                if (comp.state) {
+                    ctx.shadowColor = '#facc15';
+                    ctx.shadowBlur = 15;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            } else {
+                ctx.strokeRect(-20, -15, 40, 30);
+                ctx.fillRect(-20, -15, 40, 30);
+            }
+
+            comp.pins.forEach(pin => {
+                ctx.beginPath();
+                ctx.arc(pin.x, pin.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#60a5fa';
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            });
+
+            if (isRunning) {
+                ctx.rotate((-comp.rotation * Math.PI) / 180);
+                ctx.fillStyle = 'rgba(17, 24, 39, 0.85)';
+                ctx.fillRect(-30, -38, 60, 16);
+                ctx.strokeStyle = '#374151';
+                ctx.strokeRect(-30, -38, 60, 16);
+                ctx.fillStyle = comp.burned ? '#ef4444' : '#34d399';
+                ctx.font = '9px monospace';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                let statText = comp.burned ? 'BURNED' : `${(comp.v_drop || 0).toFixed(1)}V`;
+                if (comp.type === 'motor') statText = `${Math.round(comp.rpm)} RPM`;
+                ctx.fillText(statText, 0, -30);
+            }
+
+            ctx.restore();
+        }
+
+        function drawScope() {
+            scopeCtx.clearRect(0, 0, scopeCanvas.width, scopeCanvas.height);
+            
+            scopeCtx.strokeStyle = '#1f2937';
+            scopeCtx.lineWidth = 1;
+            let w = scopeCanvas.width;
+            let h = scopeCanvas.height;
+
+            for (let x = 0; x < w; x += 40) {
+                scopeCtx.beginPath(); scopeCtx.moveTo(x, 0); scopeCtx.lineTo(x, h); scopeCtx.stroke();
+            }
+            for (let y = 0; y < h; y += 30) {
+                scopeCtx.beginPath(); scopeCtx.moveTo(0, y); scopeCtx.lineTo(w, y); scopeCtx.stroke();
+            }
+
+            scopeCtx.strokeStyle = '#38bdf8';
+            scopeCtx.lineWidth = 2;
+            scopeCtx.beginPath();
+            let maxV = 0;
+            for (let i = 0; i < bufferSize; i++) {
+                let val = ch1Buffer[i];
+                if (Math.abs(val) > maxV) maxV = Math.abs(val);
+                let x = (i / bufferSize) * w;
+                let y = h / 2 - (val * 10);
+                if (i === 0) scopeCtx.moveTo(x, y); else scopeCtx.lineTo(x, y);
+            }
+            scopeCtx.stroke();
+
+            scopeCtx.strokeStyle = '#f472b6';
+            scopeCtx.lineWidth = 2;
+            scopeCtx.beginPath();
+            let maxI = 0;
+            for (let i = 0; i < bufferSize; i++) {
+                let val = ch2Buffer[i];
+                if (Math.abs(val) > maxI) maxI = Math.abs(val);
+                let x = (i / bufferSize) * w;
+                let y = h / 2 - (val * 2);
+                if (i === 0) scopeCtx.moveTo(x, y); else scopeCtx.lineTo(x, y);
+            }
+            scopeCtx.stroke();
+
+            document.getElementById('ch1Readout').innerText = `CH1 V_max: ${maxV.toFixed(2)} V`;
+            document.getElementById('ch2Readout').innerText = `CH2 I_rms: ${maxI.toFixed(2)} mA`;
+        }
+
+        function simulationLoop() {
+            if (isRunning) {
+                runSimulationStep();
+            }
+            drawGrid();
+            drawScope();
+            requestAnimationFrame(simulationLoop);
+        }
+        requestAnimationFrame(simulationLoop);
+
+        function selectComponentTool(type) {
+            currentTool = type;
+            setInteractionMode('place');
+        }
+
+        function setInteractionMode(mode) {
+            interactionMode = mode;
+            document.getElementById('modeSelect').className = mode === 'select' ? 'px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium transition flex items-center justify-center gap-1' : 'px-3 py-1.5 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1';
+            document.getElementById('modeWire').className = mode === 'wire' ? 'px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium transition flex items-center justify-center gap-1' : 'px-3 py-1.5 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1';
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            let mouseX = (e.clientX - rect.left - pan.x) / zoom;
+            let mouseY = (e.clientY - rect.top - pan.y) / zoom;
+
+            if (e.button === 1 || interactionMode === 'select' && e.shiftKey) {
+                isPanning = true;
+                panStart = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+                return;
+            }
+
+            if (currentTool && interactionMode === 'place') {
+                let comp = createComponent(currentTool, Math.round(mouseX / 20) * 20, Math.round(mouseY / 20) * 20);
+                components.push(comp);
+                rebuildTopology();
+                currentTool = null;
+                setInteractionMode('select');
+                return;
+            }
+
+            let clickedComp = components.find(c => Math.hypot(c.x - mouseX, c.y - mouseY) < 30);
+            if (clickedComp) {
+                selectedComponent = clickedComp;
+                updateInspector();
+                return;
+            }
+
+            selectedComponent = null;
+            updateInspector();
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isPanning) {
+                pan.x = e.clientX - panStart.x;
+                pan.y = e.clientY - panStart.y;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => { isPanning = false; });
+
+        function updateInspector() {
+            const panel = document.getElementById('inspectorContent');
+            const title = document.getElementById('selectedIdText');
+            if (!selectedComponent) {
+                title.innerText = "No Selection";
+                panel.innerHTML = `<div class="text-center py-12 text-gray-500 text-sm"><p>Select any component on the canvas to inspect its parameters, live operating status, power dissipation, and health.</p></div>`;
+                return;
+            }
+
+            title.innerText = selectedComponent.id;
+            panel.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1 font-medium">Component Type</label>
+                        <div class="text-white font-semibold uppercase bg-dark-900 p-2 rounded-lg border border-gray-700">${selectedComponent.type}</div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1 font-medium">Value / Rating</label>
+                        <input type="number" id="propValue" value="${selectedComponent.value}" onchange="updateSelectedProp('value', parseFloat(this.value))" class="w-full bg-dark-900 border border-gray-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                    </div>
+                    ${selectedComponent.type === 'vsource' ? `
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1 font-medium">Voltage (V)</label>
+                        <input type="number" id="propVoltage" value="${selectedComponent.voltage}" onchange="updateSelectedProp('voltage', parseFloat(this.value))" class="w-full bg-dark-900 border border-gray-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                    </div>` : ''}
+                    ${selectedComponent.type === 'motor' ? `
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1 font-medium">Live RPM</label>
+                        <div class="text-cyan-400 font-mono font-bold bg-dark-900 p-2 rounded-lg border border-gray-700">${Math.round(selectedComponent.rpm)} RPM</div>
+                    </div>` : ''}
+                    <div class="pt-3 border-t border-gray-700 space-y-2">
+                        <div class="text-xs font-semibold text-gray-400 uppercase">Live Operating Status</div>
+                        <div class="bg-dark-900 p-3 rounded-xl border border-gray-700 space-y-2 text-xs font-mono">
+                            <div class="flex justify-between"><span class="text-gray-400">Voltage Drop:</span> <span class="text-cyan-400">${(selectedComponent.v_drop || 0).toFixed(3)} V</span></div>
+                            <div class="flex justify-between"><span class="text-gray-400">Current:</span> <span class="text-pink-400">${((selectedComponent.current || 0) * 1000).toFixed(2)} mA</span></div>
+                            <div class="flex justify-between"><span class="text-gray-400">Dissipation:</span> <span class="text-amber-400">${((selectedComponent.power || 0) * 1000).toFixed(2)} mW</span></div>
+                            <div class="flex justify-between"><span class="text-gray-400">Health Status:</span> <span class="${selectedComponent.burned ? 'text-red-400 font-bold' : 'text-emerald-400'}">${selectedComponent.burned ? 'BURNED OUT' : 'NORMAL'}</span></div>
+                        </div>
+                    </div>
+                    <button onclick="deleteSelectedComponent()" class="w-full py-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg text-xs font-medium border border-red-500/30 transition">🗑 Delete Component</button>
+                </div>
+            `;
+        }
+
+        function updateSelectedProp(prop, val) {
+            if (selectedComponent) {
+                selectedComponent[prop] = val;
+                rebuildTopology();
+            }
+        }
+
+        function deleteSelectedComponent() {
+            if (selectedComponent) {
+                wires = wires.filter(w => w.from.comp !== selectedComponent.id && w.to.comp !== selectedComponent.id);
+                components = components.filter(c => c.id !== selectedComponent.id);
+                selectedComponent = null;
+                updateInspector();
+                rebuildTopology();
+            }
+        }
+
+        function toggleSimulation() {
+            isRunning = !isRunning;
+            document.getElementById('runIcon').innerText = isRunning ? '⏸' : '▶';
+            document.getElementById('runText').innerText = isRunning ? 'Pause Sim' : 'Run Sim';
+        }
+
+        function stepSimulation() {
+            runSimulationStep();
+        }
+
+        function resetSimulation() {
+            time = 0;
+            components.forEach(c => { c.burned = false; c.rpm = 0; });
+        }
+
+        function clearCanvas() {
+            components = [];
+            wires = [];
+            selectedComponent = null;
+            updateInspector();
+            rebuildTopology();
+        }
+
+        function zoomCanvas(factor) { zoom *= factor; }
+        function resetZoom() { zoom = 1; pan = { x: 100, y: 50 }; }
+
+        function exportJSON() {
+            let data = JSON.stringify({ components, wires }, null, 2);
+            let blob = new Blob([data], { type: 'json' });
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement('a'); a.href = url; a.download = 'circuitlab_project.json'; a.click();
+        }
+
+        function importJSON(e) {
+            let file = e.target.files[0];
+            if (!file) return;
+            let reader = new FileReader();
+            reader.onload = (event) => {
+                let data = JSON.parse(event.target.result);
+                components = data.components || [];
+                wires = data.wires || [];
+                rebuildTopology();
+            };
+            reader.readAsText(file);
+        }
+
+        loadPreset('motor_driver');
+    </script>
+</body>
+</html>
